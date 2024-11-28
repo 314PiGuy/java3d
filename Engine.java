@@ -14,6 +14,18 @@ import javax.swing.Timer;
 
 public class Engine extends JPanel {
 
+	static class rect {
+		public int screencoords[];
+		public int texturecoords[];
+		public BufferedImage texture;
+
+		public rect(int s[], int t[], BufferedImage c) {
+			screencoords = s;
+			texturecoords = t;
+			texture = c;
+		}
+	}
+
 	private static final int map[][] = {
 			{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 					1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
@@ -123,7 +135,9 @@ public class Engine extends JPanel {
 	private static final double moveSpeed = 0.06;
 	private static final double rotSpeed = 0.03;
 
-	private static boolean keys[] = new boolean[6];
+	private static final boolean keys[] = new boolean[6];
+
+	private static final rect rects[] = new rect[800];
 
 	private class Keyboard implements KeyListener {
 
@@ -183,46 +197,51 @@ public class Engine extends JPanel {
 
 	}
 
-	// required global variables
 	private final BufferedImage image;
 	private final Graphics g;
 	private final Timer timer;
 
-	// Constructor required by BufferedImage
 	public Engine() throws IOException {
 
 		image = new BufferedImage(800, 800, BufferedImage.TYPE_INT_RGB);
 		g = image.getGraphics();
-
+		TextureLoader.init();
 		timer = new Timer(10, new TimerListener());
 		timer.start();
 		addKeyListener(new Keyboard());
 		setFocusable(true);
 	}
 
-	// TimerListener class that is called repeatedly by the timer
 	private class TimerListener implements ActionListener {
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			g.setColor(Color.black);
 			g.fillRect(0, 0, 800, 800);
 
+			// g.drawImage(TextureLoader.wallTexture, 200, 200, null);
+
 			move();
 
-			renderWalls(g);
+			renderWalls();
+
+			for (rect r : rects) {
+				g.drawImage(r.texture, r.screencoords[0],
+						r.screencoords[1], r.screencoords[2], r.screencoords[3], r.texturecoords[0],
+						r.texturecoords[1],
+						r.texturecoords[2], r.texturecoords[3], null);
+			}
 
 			repaint();
 		}
 
 	}
 
-	// do not modify this
 	@Override
 	public void paintComponent(Graphics g) {
 		g.drawImage(image, 0, 0, getWidth(), getHeight(), null);
 	}
 
-	void renderWalls(Graphics g) {
+	void renderWalls() {
 
 		for (int x = 0; x < 800; x++) {
 			double c = x / 400.0 - 1;
@@ -261,16 +280,28 @@ public class Engine extends JPanel {
 					break;
 				if (map[mapX][mapY] != 0) {
 					double dist;
+					double wallcoord;
 					if (side == 0) {
 						dist = (lenX - dx);
+						double texturedist = dist * raydirY + posY;
+						wallcoord = texturedist - (int) texturedist;
 					} else {
 						dist = (lenY - dy);
+						double texturedist = dist * raydirX + posX;
+						wallcoord = texturedist - (int) texturedist;
 					}
 
 					int lineHeight = (int) (800 / (dist));
-					
-					g.setColor(Color.red);
-					g.fillRect((int) x, (int) (400 - lineHeight / 2), 1, (int)lineHeight);
+
+					int imWidth = TextureLoader.wallTexture.getWidth();
+					int imHeight = TextureLoader.wallTexture.getHeight();
+
+					int screencoords[] = { (int) x, (int) (400 - lineHeight / 2), (int) x + 1,
+							(int) (400 + lineHeight / 2) };
+					int texturecoords[] = { (int) (wallcoord * imWidth), 0, (int) (wallcoord * imWidth) + 1, imHeight };
+
+					rects[x] = new rect(screencoords, texturecoords, TextureLoader.wallTexture);
+
 					break;
 				}
 				if (lenY < lenX) {
@@ -330,7 +361,6 @@ public class Engine extends JPanel {
 		}
 	}
 
-	// main method with standard graphics code
 	public static void main(String[] args) throws IOException {
 		JFrame frame = new JFrame("thing");
 		frame.setSize(800, 800);
