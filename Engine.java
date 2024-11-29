@@ -358,8 +358,8 @@ public class Engine extends JPanel {
 				double pixely = (raydirY * perpDist + posY);
 				if ((pixelx >= 0 && pixelx < 48) && (pixely >= 0 && pixely < 48)
 						&& map[(int) pixelx][(int) pixely] != 2) {
-					int imagex = (int) ((pixelx - (int) pixelx) * 255);
-					int imagey = (int) ((pixely - (int) pixely) * 255);
+					int imagex = (int) ((pixelx - (int) pixelx) * 100);
+					int imagey = (int) ((pixely - (int) pixely) * 100);
 					int pixelColor = textureData[100 * imagey + imagex];
 					imageData[800 * (y + 400) + x] = pixelColor;
 				}
