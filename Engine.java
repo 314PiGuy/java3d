@@ -321,7 +321,7 @@ public class Engine extends JPanel {
 
 	public void drawFloor(){
 		for (int x = 0; x < 800; x++){
-			double c = x/400-1;
+			double c = x/400.0-1;
 			double raydirX = dirX + c*planeX;
 			double raydirY = dirY + c*planeY;
 			for (int y = 0; y < 400; y++){
