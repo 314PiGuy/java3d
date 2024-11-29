@@ -7,7 +7,13 @@ import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.Timer;
@@ -201,6 +207,10 @@ public class Engine extends JPanel {
 	private final Graphics g;
 	private final Timer timer;
 
+	private static final ExecutorService executor = Executors
+			.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+	private static final Future<?> futures[] = new Future<?>[800];
+
 	public Engine() throws IOException {
 
 		image = new BufferedImage(800, 800, BufferedImage.TYPE_INT_RGB);
@@ -226,12 +236,24 @@ public class Engine extends JPanel {
 
 			drawFloor();
 
-			for (rect r : rects) {
-				g.drawImage(r.texture, r.screencoords[0],
-						r.screencoords[1], r.screencoords[2], r.screencoords[3], r.texturecoords[0],
-						r.texturecoords[1],
-						r.texturecoords[2], r.texturecoords[3], null);
+			for (int i = 0; i < 800; i++) {
+				rect r = rects[i];
+				Future<?> future = executor.submit(() -> {
+					return g.drawImage(TextureLoader.wallTexture, r.screencoords[0],
+							r.screencoords[1], r.screencoords[2], r.screencoords[3], r.texturecoords[0],
+							r.texturecoords[1],
+							r.texturecoords[2], r.texturecoords[3], null);
+				});
+				futures[i] = future;
 			}
+
+			Arrays.stream(futures).parallel().forEach(future -> {
+				try {
+					if (future != null)
+						future.get();
+				} catch (InterruptedException | ExecutionException f) {
+				}
+			});
 
 			repaint();
 		}
@@ -319,20 +341,27 @@ public class Engine extends JPanel {
 		}
 	}
 
-	public void drawFloor(){
-		for (int x = 0; x < 800; x++){
-			double c = x/400.0-1;
-			double raydirX = dirX + c*planeX;
-			double raydirY = dirY + c*planeY;
-			for (int y = 0; y < 400; y++){
-				double perpDist = 400.0/y;
-				double pixelx = (raydirX*perpDist + posX);
-				double pixely = (raydirY*perpDist + posY);
-				if ((pixelx >= 0 && pixelx <= 48) && (pixely >= 0 && pixely <= 48)){
-					int imagex = (int)((pixelx-(int)pixelx)*225);
-					int imagey = (int)((pixely-(int)pixely)*225);
-					int pixelColor = TextureLoader.floorTexture.getRGB(imagex, imagey);
-					image.setRGB(x, 400+y, pixelColor);
+	public void drawFloor() {
+		DataBufferInt imageBuffer = (DataBufferInt) image.getRaster().getDataBuffer();
+		DataBufferInt textureBuffer = (DataBufferInt) TextureLoader.floorTexture.getRaster().getDataBuffer();
+
+		int imageData[] = imageBuffer.getData();
+		int textureData[] = textureBuffer.getData();
+
+		for (int x = 0; x < 800; x++) {
+			double c = x / 400.0 - 1;
+			double raydirX = dirX + c * planeX;
+			double raydirY = dirY + c * planeY;
+			for (int y = 0; y < 400; y++) {
+				double perpDist = 400.0 / y;
+				double pixelx = (raydirX * perpDist + posX);
+				double pixely = (raydirY * perpDist + posY);
+				if ((pixelx >= 0 && pixelx < 48) && (pixely >= 0 && pixely < 48)
+						&& map[(int) pixelx][(int) pixely] != 2) {
+					int imagex = (int) ((pixelx - (int) pixelx) * 255);
+					int imagey = (int) ((pixely - (int) pixely) * 255);
+					int pixelColor = textureData[100 * imagey + imagex];
+					imageData[800 * (y + 400) + x] = pixelColor;
 				}
 			}
 		}
