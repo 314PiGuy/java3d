@@ -224,6 +224,8 @@ public class Engine extends JPanel {
 
 			renderWalls();
 
+			drawFloor();
+
 			for (rect r : rects) {
 				g.drawImage(r.texture, r.screencoords[0],
 						r.screencoords[1], r.screencoords[2], r.screencoords[3], r.texturecoords[0],
@@ -241,7 +243,7 @@ public class Engine extends JPanel {
 		g.drawImage(image, 0, 0, getWidth(), getHeight(), null);
 	}
 
-	void renderWalls() {
+	public void renderWalls() {
 
 		for (int x = 0; x < 800; x++) {
 			double c = x / 400.0 - 1;
@@ -312,6 +314,25 @@ public class Engine extends JPanel {
 					mapX += stepX;
 					lenX += dx;
 					side = 0;
+				}
+			}
+		}
+	}
+
+	public void drawFloor(){
+		for (int x = 0; x < 800; x++){
+			double c = x/400-1;
+			double raydirX = dirX + c*planeX;
+			double raydirY = dirY + c*planeY;
+			for (int y = 0; y < 400; y++){
+				double perpDist = 400.0/y;
+				double pixelx = (raydirX*perpDist + posX);
+				double pixely = (raydirY*perpDist + posY);
+				if ((pixelx >= 0 && pixelx <= 48) && (pixely >= 0 && pixely <= 48)){
+					int imagex = (int)((pixelx-(int)pixelx)*225);
+					int imagey = (int)((pixely-(int)pixely)*225);
+					int pixelColor = TextureLoader.floorTexture.getRGB(imagex, imagey);
+					image.setRGB(x, 400+y, pixelColor);
 				}
 			}
 		}

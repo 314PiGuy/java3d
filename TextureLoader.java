@@ -13,6 +13,7 @@ public class TextureLoader {
 
     public static void init() throws IOException{
         wallTexture = ImageIO.read(new File("textures/hackclub.jpg"));
+        floorTexture = ImageIO.read(new File("textures/woodfloor.jpg"));
     }
 
 }
