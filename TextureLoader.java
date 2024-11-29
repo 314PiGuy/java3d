@@ -12,7 +12,7 @@ public class TextureLoader {
     public static BufferedImage floorTexture2;
 
     public static void init() throws IOException{
-        wallTexture = ImageIO.read(new File("textures/brickwall.jpg"));
+        wallTexture = ImageIO.read(new File("textures/hackclub.jpg"));
     }
 
 }
