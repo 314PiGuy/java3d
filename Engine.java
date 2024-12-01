@@ -228,7 +228,7 @@ public class Engine extends JPanel {
 			g.setColor(Color.black);
 			g.fillRect(0, 0, 800, 800);
 
-			// g.drawImage(TextureLoader.wallTexture, 200, 200, null);
+			long a = System.nanoTime();
 
 			move();
 
@@ -254,6 +254,11 @@ public class Engine extends JPanel {
 				} catch (InterruptedException | ExecutionException f) {
 				}
 			});
+
+			long dif = System.nanoTime() - a;
+			double fps = 1000000000.0 / dif;
+			g.setColor(Color.red);
+			g.drawString("FPS: " + Integer.toString((int) fps), 10, 10);
 
 			repaint();
 		}
@@ -309,10 +314,14 @@ public class Engine extends JPanel {
 						dist = (lenX - dx);
 						double texturedist = dist * raydirY + posY;
 						wallcoord = texturedist - (int) texturedist;
+						if (posX < mapX)
+							wallcoord = 1 - wallcoord;
 					} else {
 						dist = (lenY - dy);
 						double texturedist = dist * raydirX + posX;
 						wallcoord = texturedist - (int) texturedist;
+						if (posY > mapY)
+							wallcoord = 1 - wallcoord;
 					}
 
 					int lineHeight = (int) (800 / (dist));
@@ -412,6 +421,7 @@ public class Engine extends JPanel {
 	}
 
 	public static void main(String[] args) throws IOException {
+		System.setProperty("sun.java2d.opengl", "true");
 		JFrame frame = new JFrame("thing");
 		frame.setSize(800, 800);
 		frame.setLocation(0, 0);
