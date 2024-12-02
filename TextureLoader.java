@@ -11,6 +11,7 @@ public class TextureLoader {
     public static BufferedImage wallTexture2;
     public static BufferedImage floorTexture;
     public static BufferedImage floorTexture2;
+    public static BufferedImage spriteTexture;
 
     public static BufferedImage loadImageAsRGB(String filePath) throws IOException {
         BufferedImage originalImage = ImageIO.read(new File(filePath));
@@ -34,8 +35,8 @@ public class TextureLoader {
 
     public static void init() throws IOException{
         wallTexture = ImageIO.read(new File("textures/hackclub.jpg"));
-        // floorTexture = ImageIO.read(new File("textures/woodfloor.jpg"));
         floorTexture = loadImageAsRGB("textures/woodfloor.jpg");
+        spriteTexture = ImageIO.read((new File("textures/doomsprite.png")));
     }
 
 }

@@ -9,7 +9,10 @@ import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,11 +27,31 @@ public class Engine extends JPanel {
 		public int screencoords[];
 		public int texturecoords[];
 		public BufferedImage texture;
+		public double distance;
 
-		public rect(int s[], int t[], BufferedImage c) {
+		public rect(int s[], int t[], BufferedImage c, double d) {
 			screencoords = s;
 			texturecoords = t;
 			texture = c;
+			distance = d;
+		}
+	}
+
+	static class sprite {
+		public int screencoords[];
+		public int texturecoords[];
+		public BufferedImage texture;
+		public double distance;
+
+		public sprite(int s[], int t[], BufferedImage c, double d) {
+			screencoords = s;
+			texturecoords = t;
+			texture = c;
+			distance = d;
+		}
+
+		public double getDistance() {
+			return distance;
 		}
 	}
 
@@ -210,6 +233,9 @@ public class Engine extends JPanel {
 	private static final ExecutorService executor = Executors
 			.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 	private static final Future<?> futures[] = new Future<?>[800];
+	private static final ArrayList<sprite> sprites = new ArrayList<>();
+	private static final ArrayList<Character> characters = new ArrayList<>();
+	private static final int drawn[] = new int[800];
 
 	public Engine() throws IOException {
 
@@ -220,6 +246,8 @@ public class Engine extends JPanel {
 		timer.start();
 		addKeyListener(new Keyboard());
 		setFocusable(true);
+
+		characters.add(new Character(3, 3, TextureLoader.spriteTexture));
 	}
 
 	private class TimerListener implements ActionListener {
@@ -236,8 +264,45 @@ public class Engine extends JPanel {
 
 			drawFloor();
 
+			renderSprites();
+
+			Collections.sort(sprites, Comparator.comparingDouble(sprite::getDistance).reversed());
+
+			Arrays.setAll(drawn, i -> 0);
+
+			for (sprite s : sprites) {
+				for (int i = 0; i < 800; i++) {
+					rect r = rects[i];
+					if (drawn[i] == 1 || r.distance < s.distance)
+						continue;
+					Future<?> future = executor.submit(() -> {
+						return g.drawImage(TextureLoader.wallTexture, r.screencoords[0],
+								r.screencoords[1], r.screencoords[2], r.screencoords[3], r.texturecoords[0],
+								r.texturecoords[1],
+								r.texturecoords[2], r.texturecoords[3], null);
+					});
+					drawn[i] = 1;
+					futures[i] = future;
+				}
+
+				Arrays.stream(futures).parallel().forEach(future -> {
+					try {
+						if (future != null)
+							future.get();
+					} catch (InterruptedException | ExecutionException f) {
+					}
+				});
+
+				g.drawImage(s.texture, s.screencoords[0],
+						s.screencoords[1], s.screencoords[2], s.screencoords[3], s.texturecoords[0],
+						s.texturecoords[1],
+						s.texturecoords[2], s.texturecoords[3], null);
+			}
+
 			for (int i = 0; i < 800; i++) {
 				rect r = rects[i];
+				if (drawn[i] == 1)
+					continue;
 				Future<?> future = executor.submit(() -> {
 					return g.drawImage(TextureLoader.wallTexture, r.screencoords[0],
 							r.screencoords[1], r.screencoords[2], r.screencoords[3], r.texturecoords[0],
@@ -333,7 +398,7 @@ public class Engine extends JPanel {
 							(int) (400 + lineHeight / 2) };
 					int texturecoords[] = { (int) (wallcoord * imWidth), 0, (int) (wallcoord * imWidth) + 1, imHeight };
 
-					rects[x] = new rect(screencoords, texturecoords, TextureLoader.wallTexture);
+					rects[x] = new rect(screencoords, texturecoords, TextureLoader.wallTexture, dist);
 
 					break;
 				}
@@ -353,6 +418,8 @@ public class Engine extends JPanel {
 	public void drawFloor() {
 		DataBufferInt imageBuffer = (DataBufferInt) image.getRaster().getDataBuffer();
 		DataBufferInt textureBuffer = (DataBufferInt) TextureLoader.floorTexture.getRaster().getDataBuffer();
+		int textureX = TextureLoader.floorTexture.getWidth();
+		int textureY = TextureLoader.floorTexture.getHeight();
 
 		int imageData[] = imageBuffer.getData();
 		int textureData[] = textureBuffer.getData();
@@ -367,11 +434,52 @@ public class Engine extends JPanel {
 				double pixely = (raydirY * perpDist + posY);
 				if ((pixelx >= 0 && pixelx < 48) && (pixely >= 0 && pixely < 48)
 						&& map[(int) pixelx][(int) pixely] != 2) {
-					int imagex = (int) ((pixelx - (int) pixelx) * 225);
-					int imagey = (int) ((pixely - (int) pixely) * 225);
-					int pixelColor = textureData[225 * imagey + imagex];
+					int imagex = (int) ((pixelx - (int) pixelx) * textureX);
+					int imagey = (int) ((pixely - (int) pixely) * textureY);
+					int pixelColor = textureData[textureX * imagey + imagex];
 					imageData[800 * (y + 400) + x] = pixelColor;
 				}
+			}
+		}
+	}
+
+	public static void renderSprites() {
+		sprites.clear();
+		double sx;
+		double sd;
+		for (int i = 0; i < characters.size(); i++) {
+			double x = characters.get(i).getX();
+			double y = characters.get(i).getY();
+			double dist = Math.sqrt((x - posX) * (x - posX) + (y - posY) * (y - posY));
+			double angleC = Math.atan(Math.abs(dirY) / Math.abs(dirX));
+			if (dirX < 0)
+				angleC = Math.PI - angleC;
+			if (dirY < 0)
+				angleC *= -1;
+			if (angleC < 0)
+				angleC += 2 * Math.PI;
+			double angleE = Math.atan(Math.abs(posY - y) / Math.abs(posX - x));
+			if (x - posX < 0)
+				angleE = Math.PI - angleE;
+			if (y - posY < 0)
+				angleE *= -1;
+			if (angleE < 0)
+				angleE += 2 * Math.PI;
+			double angledif = angleE - angleC;
+			if (angledif > Math.PI)
+				angledif -= Math.PI * 2;
+			if (angledif < -Math.PI)
+				angledif += Math.PI * 2;
+			if (Math.abs(angledif) < 0.78) {
+				Character e = characters.get(i);
+				sd = dist * Math.abs(Math.cos(angledif));
+				sx = (int) ((dist * Math.sin(-angledif) / sd) / 0.65 * 400 + 400);
+				int spriteDim = (int) (350 / sd);
+				int screenCoords[] = { (int) sx - spriteDim, 400 - spriteDim, (int) sx + spriteDim,
+						400 + spriteDim };
+				int textureCoords[] = { 0, 0, e.getSprite().getWidth(), e.getSprite().getHeight() };
+				sprite r = new sprite(screenCoords, textureCoords, e.getSprite(), sd);
+				sprites.add(r);
 			}
 		}
 	}
