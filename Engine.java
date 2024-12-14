@@ -166,7 +166,9 @@ public class Engine extends JPanel {
 
 	private static final boolean keys[] = new boolean[6];
 
-	private static final rect rects[] = new rect[800];
+	private static final int transparencyLimit = 5;
+
+	private static final rect rects[] = new rect[800 * transparencyLimit];
 
 	private class Keyboard implements KeyListener {
 
@@ -232,10 +234,10 @@ public class Engine extends JPanel {
 
 	private static final ExecutorService executor = Executors
 			.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-	private static final Future<?> futures[] = new Future<?>[800];
+	private static final Future<?> futures[] = new Future<?>[800*transparencyLimit];
 	private static final ArrayList<sprite> sprites = new ArrayList<>();
 	private static final ArrayList<Character> characters = new ArrayList<>();
-	private static final int drawn[] = new int[800];
+	private static final int drawn[] = new int[800*transparencyLimit];
 
 	public Engine() throws IOException {
 
@@ -260,70 +262,68 @@ public class Engine extends JPanel {
 
 			move();
 
-			renderWalls();
-
 			drawFloor();
-
+			renderWalls();
 			renderSprites();
-
 			Collections.sort(sprites, Comparator.comparingDouble(sprite::getDistance).reversed());
-
+			int size = 800 * transparencyLimit;
 			Arrays.setAll(drawn, i -> 0);
 
+			sprite S = null;
 			for (sprite s : sprites) {
-				for (int i = 0; i < 800; i++) {
-					rect r = rects[i];
-					if (drawn[i] == 1 || r.distance < s.distance)
+				S = s;
+				for (int j = 0; j < size; j++) {
+					rect r = rects[j];
+					if (r == null || drawn[j] == 1)
 						continue;
+					if (r.distance > s.distance) {
+						Future<?> future = executor.submit(() -> {
+							return g.drawImage(TextureLoader.wallTexture, r.screencoords[0],
+									r.screencoords[1], r.screencoords[2], r.screencoords[3], r.texturecoords[0],
+									r.texturecoords[1],
+									r.texturecoords[2], r.texturecoords[3], null);
+						});
+						futures[j] = future;
+						drawn[j] = 1;
+					}
+				}
+				for (Future<?> future : futures) {
+					try {
+						if (future != null)
+							future.get();
+					} catch (InterruptedException | ExecutionException f) {
+					}
+				}
+
+				g.drawImage(s.texture, s.screencoords[0],
+						s.screencoords[1], s.screencoords[2], s.screencoords[3], s.texturecoords[0],
+						s.texturecoords[1],
+						s.texturecoords[2], s.texturecoords[3], null);
+
+			}
+			for (int j = 0; j < size; j++) {
+				rect r = rects[j];
+				if (r == null || drawn[j] == 1)
+					continue;
+				if (S == null || r.distance < S.distance) {
 					Future<?> future = executor.submit(() -> {
 						return g.drawImage(TextureLoader.wallTexture, r.screencoords[0],
 								r.screencoords[1], r.screencoords[2], r.screencoords[3], r.texturecoords[0],
 								r.texturecoords[1],
 								r.texturecoords[2], r.texturecoords[3], null);
 					});
-					drawn[i] = 1;
-					futures[i] = future;
+					futures[j] = future;
 				}
-
-				Arrays.stream(futures).parallel().forEach(future -> {
-					try {
-						if (future != null)
-							future.get();
-					} catch (InterruptedException | ExecutionException f) {
-					}
-				});
-
-				g.drawImage(s.texture, s.screencoords[0],
-						s.screencoords[1], s.screencoords[2], s.screencoords[3], s.texturecoords[0],
-						s.texturecoords[1],
-						s.texturecoords[2], s.texturecoords[3], null);
 			}
-
-			for (int i = 0; i < 800; i++) {
-				rect r = rects[i];
-				if (drawn[i] == 1)
-					continue;
-				Future<?> future = executor.submit(() -> {
-					return g.drawImage(TextureLoader.wallTexture, r.screencoords[0],
-							r.screencoords[1], r.screencoords[2], r.screencoords[3], r.texturecoords[0],
-							r.texturecoords[1],
-							r.texturecoords[2], r.texturecoords[3], null);
-				});
-				futures[i] = future;
-			}
-
-			Arrays.stream(futures).parallel().forEach(future -> {
+			for (Future<?> future : futures) {
 				try {
 					if (future != null)
 						future.get();
 				} catch (InterruptedException | ExecutionException f) {
 				}
-			});
+			}
 
-			long dif = System.nanoTime() - a;
-			double fps = 1000000000.0 / dif;
-			g.setColor(Color.red);
-			g.drawString("FPS: " + Integer.toString((int) fps), 10, 10);
+			Arrays.setAll(rects, i -> null);
 
 			repaint();
 		}
@@ -335,8 +335,27 @@ public class Engine extends JPanel {
 		g.drawImage(image, 0, 0, getWidth(), getHeight(), null);
 	}
 
-	public void renderWalls() {
+	public static int wallHit(int mapX, int mapY, double posX, double posY, int side) {
+		int type;
+		if ((type = map[mapX][mapY]) != 0)
+			return type;
+		if (side == 0) {
+			if ((type = map[mapX - 1][mapY]) != 0 && posX < mapX)
+				return type;
+			if ((type = map[mapX + 1][mapY]) != 0 && posX > mapX + 1) {
+				return type;
+			}
+		} else {
+			if ((type = map[mapX][mapY + 1]) != 0 && posY > mapY + 1)
+				return type;
+			else if ((type = map[mapX][mapY - 1]) != 0 && posY < mapY)
+				return type;
+		}
+		type = 0;
+		return type;
+	}
 
+	public static void renderWalls() {
 		for (int x = 0; x < 800; x++) {
 			double c = x / 400.0 - 1;
 			double raydirX = dirX + c * planeX;
@@ -369,39 +388,42 @@ public class Engine extends JPanel {
 				stepY = 1;
 			}
 
+			double wallcoord;
+			double dist;
+
+			int hits = 0;
 			for (int i = 0; i < 200; i++) {
 				if ((mapX < 0 || mapX >= 48) || (mapY < 0 || mapY >= 48))
 					break;
-				if (map[mapX][mapY] != 0) {
-					double dist;
-					double wallcoord;
+
+				int walltype;
+				if ((walltype = wallHit(mapX, mapY, posX, posY, side)) != 0) {
+					hits++;
+					boolean b = false;
+					if (hits >= transparencyLimit) {
+						hits = transparencyLimit;
+						b = true;
+					}
+
+					int height = 800;
+
 					if (side == 0) {
 						dist = (lenX - dx);
 						double texturedist = dist * raydirY + posY;
 						wallcoord = texturedist - (int) texturedist;
-						if (posX < mapX)
-							wallcoord = 1 - wallcoord;
 					} else {
 						dist = (lenY - dy);
 						double texturedist = dist * raydirX + posX;
 						wallcoord = texturedist - (int) texturedist;
-						if (posY > mapY)
-							wallcoord = 1 - wallcoord;
 					}
 
-					int lineHeight = (int) (800 / (dist));
+					addWallStrip(dist, wallcoord, hits, x, height);
 
-					int imWidth = TextureLoader.wallTexture.getWidth();
-					int imHeight = TextureLoader.wallTexture.getHeight();
+					if (b)
+						break;
 
-					int screencoords[] = { (int) x, (int) (400 - lineHeight / 2), (int) x + 1,
-							(int) (400 + lineHeight / 2) };
-					int texturecoords[] = { (int) (wallcoord * imWidth), 0, (int) (wallcoord * imWidth) + 1, imHeight };
-
-					rects[x] = new rect(screencoords, texturecoords, TextureLoader.wallTexture, dist);
-
-					break;
 				}
+
 				if (lenY < lenX) {
 					mapY += stepY;
 					lenY += dy;
@@ -413,6 +435,16 @@ public class Engine extends JPanel {
 				}
 			}
 		}
+	}
+
+	public static void addWallStrip(double dist, double wallcoord, int hits, int x, int h) {
+		int lh = (int) (800 / dist);
+		int lineHeight = (int) (h / dist);
+		int screencoords[] = { (int) x, (int) (400 + lh / 2 - lineHeight), (int) x + 1,
+				(int) (400 + lh / 2) };
+		int texturecoords[] = { (int) (wallcoord * 100), 0, (int) (wallcoord * 100) + 1, 99 };
+		rects[800 * (transparencyLimit - hits) + x] = new rect(screencoords, texturecoords,
+				TextureLoader.wallTexture, dist);
 	}
 
 	public void drawFloor() {

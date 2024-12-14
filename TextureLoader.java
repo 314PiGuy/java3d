@@ -34,7 +34,7 @@ public class TextureLoader {
     }
 
     public static void init() throws IOException{
-        wallTexture = ImageIO.read(new File("textures/hackclub.jpg"));
+        wallTexture = ImageIO.read(new File("textures/bars.png"));
         floorTexture = loadImageAsRGB("textures/woodfloor.jpg");
         spriteTexture = ImageIO.read((new File("textures/doomsprite.png")));
     }
