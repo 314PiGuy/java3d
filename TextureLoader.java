@@ -7,11 +7,7 @@ import javax.imageio.ImageIO;
 
 public class TextureLoader {
     
-    public static BufferedImage wallTexture;
-    public static BufferedImage wallTexture2;
-    public static BufferedImage floorTexture;
-    public static BufferedImage floorTexture2;
-    public static BufferedImage spriteTexture;
+    public static BufferedImage wallTexture, floorTexture, spriteTexture, projectileTexture;
 
     public static BufferedImage loadImageAsRGB(String filePath) throws IOException {
         BufferedImage originalImage = ImageIO.read(new File(filePath));
@@ -37,6 +33,7 @@ public class TextureLoader {
         wallTexture = ImageIO.read(new File("textures/bars.png"));
         floorTexture = loadImageAsRGB("textures/woodfloor.jpg");
         spriteTexture = ImageIO.read((new File("textures/doomsprite.png")));
+        projectileTexture = ImageIO.read(new File("textures/projectile.png"));
     }
 
 }

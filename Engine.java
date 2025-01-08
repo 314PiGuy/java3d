@@ -20,6 +20,7 @@ import java.util.concurrent.Future;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.Timer;
+import javax.xml.stream.events.Characters;
 
 public class Engine extends JPanel {
 
@@ -161,6 +162,8 @@ public class Engine extends JPanel {
 	private static double planeX = 0;
 	private static double planeY = 0.65;
 
+	private static int reload = 5;
+
 	private static final double moveSpeed = 0.06;
 	private static final double rotSpeed = 0.03;
 
@@ -219,10 +222,19 @@ public class Engine extends JPanel {
 				}
 			}
 
-			if (e.getKeyCode() == KeyEvent.VK_LEFT) {
-				keys[4] = false;
-			} else if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
-				keys[5] = false;
+			switch (e.getKeyCode()) {
+				case KeyEvent.VK_LEFT:
+					keys[4] = false;
+					break;
+				case KeyEvent.VK_RIGHT:
+					keys[5] = false;
+					break;
+				case KeyEvent.VK_SPACE:
+					shoot();
+					System.out.println(projectiles.size());
+					break;
+				default:
+					break;
 			}
 		}
 
@@ -234,10 +246,14 @@ public class Engine extends JPanel {
 
 	private static final ExecutorService executor = Executors
 			.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-	private static final Future<?> futures[] = new Future<?>[800*transparencyLimit];
+	private static final Future<?> futures[] = new Future<?>[800 * transparencyLimit];
+
 	private static final ArrayList<sprite> sprites = new ArrayList<>();
 	private static final ArrayList<Character> characters = new ArrayList<>();
-	private static final int drawn[] = new int[800*transparencyLimit];
+
+	private static ArrayList<Projectile> projectiles = new ArrayList<>();
+
+	private static final int drawn[] = new int[800 * transparencyLimit];
 
 	public Engine() throws IOException {
 
@@ -258,13 +274,13 @@ public class Engine extends JPanel {
 			g.setColor(Color.black);
 			g.fillRect(0, 0, 800, 800);
 
-			long a = System.nanoTime();
-
 			move();
+			moveThings();
 
 			drawFloor();
 			renderWalls();
 			renderSprites();
+			renderProjectiles();
 			Collections.sort(sprites, Comparator.comparingDouble(sprite::getDistance).reversed());
 			int size = 800 * transparencyLimit;
 			Arrays.setAll(drawn, i -> 0);
@@ -333,6 +349,35 @@ public class Engine extends JPanel {
 	@Override
 	public void paintComponent(Graphics g) {
 		g.drawImage(image, 0, 0, getWidth(), getHeight(), null);
+	}
+
+	public void shoot() {
+		if (reload > 0) {
+			return;
+		}
+		reload = 10;
+		Projectile p = new Projectile(posX, posY, dirX, dirY, true);
+		projectiles.add(p);
+	}
+
+	public void moveThings() {
+		reload -= 1;
+		for (int i = 0; i < characters.size(); i++){
+			int a = (int)(Math.random()*361);
+			projectiles = characters.get(i).move(posX, posY, characters, projectiles, map, a);
+			if (characters.get(i).dead){
+				characters.remove(i);
+			} 
+		}
+		for (int i = 0; i < projectiles.size(); i++) {
+			Projectile p = projectiles.get(i);
+			p.move(map);
+			if (p.isdead()) {
+				projectiles.remove(p);
+			} else if (p.outOfBounds(48, 48, map)) {
+				projectiles.remove(p);
+			}
+		}
 	}
 
 	public static int wallHit(int mapX, int mapY, double posX, double posY, int side) {
@@ -471,6 +516,49 @@ public class Engine extends JPanel {
 					int pixelColor = textureData[textureX * imagey + imagex];
 					imageData[800 * (y + 400) + x] = pixelColor;
 				}
+			}
+		}
+	}
+
+	public void renderProjectiles() {
+		double sx;
+		double sd;
+		double sy;
+		for (int i = 0; i < projectiles.size(); i++) {
+			double x = projectiles.get(i).getX();
+			double y = projectiles.get(i).getY();
+			double dist = Math.sqrt((x - posX) * (x - posX) + (y - posY) * (y - posY));
+			double angleC = Math.atan(Math.abs(dirY) / Math.abs(dirX));
+			if (dirX < 0)
+				angleC = Math.PI - angleC;
+			if (dirY < 0)
+				angleC *= -1;
+			if (angleC < 0)
+				angleC += 2 * Math.PI;
+			double angleE = Math.atan(Math.abs(posY - y) / Math.abs(posX - x));
+			if (x - posX < 0)
+				angleE = Math.PI - angleE;
+			if (y - posY < 0)
+				angleE *= -1;
+			if (angleE < 0)
+				angleE += 2 * Math.PI;
+			double angledif = angleE - angleC;
+			if (angledif > Math.PI)
+				angledif -= Math.PI * 2;
+			if (angledif < -Math.PI)
+				angledif += Math.PI * 2;
+			if (Math.abs(angledif) < 0.78) {
+
+				sd = dist * Math.abs(Math.cos(angledif));
+				sx = (dist * Math.sin(-angledif) / sd) / 0.65 * 400 + 400;
+				sy = 400 + 120 / sd;
+				double dim = 100 / sd;
+				double cornerX = sx - 50 / sd;
+				double cornerY = sy - 50 / sd;
+				int[] screenCoords = { (int) cornerX, (int) cornerY, (int) (cornerX + dim), (int) (cornerY + dim) };
+				int[] textureCoords = { 0, 0, 225, 225 };
+				sprite p = new sprite(screenCoords, textureCoords, image, sd);
+				sprites.add(p);
 			}
 		}
 	}
